@@ -1,5 +1,6 @@
 import os
 import json
+import requests
 from datetime import datetime
 
 from flask import Flask, request, render_template, redirect
@@ -7,7 +8,6 @@ import psycopg2
 from psycopg2.extras import DictCursor
 import gspread
 from google.oauth2.service_account import Credentials
-from twilio.rest import Client
 
 app = Flask(__name__)
 
@@ -83,14 +83,32 @@ def save_to_google_sheets(data):
 
 
 # =====================================================
-# TWILIO CONFIG
+# META WHATSAPP CLOUD API
 # =====================================================
 
-account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-twilio_number = "whatsapp:+14155238886"
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
 
-client = Client(account_sid, auth_token)
+
+def send_whatsapp_message(phone, message):
+
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": f"91{phone}",
+        "type": "text",
+        "text": {
+            "body": message
+        }
+    }
+
+    requests.post(url, headers=headers, json=data)
 
 
 # =====================================================
@@ -167,6 +185,7 @@ Student: {name}
 Roll No: {roll_number}
 Department & Year: {department}
 Room: {room}
+
 Reason: {reason}
 Days: {days}
 Start: {start}
@@ -179,11 +198,7 @@ By Warden
     if action == "Approved":
         for number in [parent_phone, principal, student_phone]:
             if number:
-                client.messages.create(
-                    from_=twilio_number,
-                    body=message_body,
-                    to=f"whatsapp:+91{number}"
-                )
+                send_whatsapp_message(number, message_body)
 
     # Save to Google Sheets
     save_to_google_sheets([
