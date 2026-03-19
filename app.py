@@ -15,7 +15,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "hostel-secret")
 
 # =====================================================
-# DATABASE CONNECTION (PostgreSQL)
+# DATABASE CONNECTION
 # =====================================================
 
 def get_db_connection():
@@ -23,7 +23,6 @@ def get_db_connection():
         os.environ.get("DATABASE_URL"),
         sslmode="require"
     )
-
 
 def init_db():
     conn = get_db_connection()
@@ -44,9 +43,7 @@ def init_db():
     cur.close()
     conn.close()
 
-
 init_db()
-
 
 def get_student_details(roll_number):
     roll_number = roll_number.strip().upper()
@@ -54,17 +51,13 @@ def get_student_details(roll_number):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
 
-    cur.execute("""
-        SELECT * FROM students WHERE roll_number = %s
-    """, (roll_number,))
-
+    cur.execute("SELECT * FROM students WHERE roll_number = %s", (roll_number,))
     result = cur.fetchone()
 
     cur.close()
     conn.close()
 
     return result
-
 
 # =====================================================
 # GOOGLE SHEETS
@@ -98,21 +91,18 @@ def save_to_google_sheets(data):
 
     return False
 
-
 # =====================================================
-# WHATSAPP API (META)
+# WHATSAPP API
 # =====================================================
 
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
-
 
 def format_phone(phone):
     phone = phone.strip().replace("+", "")
     if not phone.startswith("91"):
         phone = "91" + phone
     return phone
-
 
 def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end):
 
@@ -123,12 +113,15 @@ def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, s
         "Content-Type": "application/json"
     }
 
+    formatted = format_phone(phone)
+    print("📱 Sending to:", formatted)
+
     data = {
-    "messaging_product": "whatsapp",
-    "to": format_phone(phone),
-    "type": "text",
-    "text": {
-        "body": f"""Leave {action}
+        "messaging_product": "whatsapp",
+        "to": formatted,
+        "type": "text",
+        "text": {
+            "body": f"""Leave {action}
 
 Student: {name}
 Roll: {roll}
@@ -142,22 +135,21 @@ End: {end}
 
 - Hostel Management
 """
+        }
     }
-}
+
     try:
         res = requests.post(url, headers=headers, json=data)
-        print("WhatsApp Status:", res.status_code)
-        print("WhatsApp Response:", res.text)
+        print("✅ Status:", res.status_code)
+        print("📨 Response:", res.text)
     except Exception as e:
-        print("WhatsApp Error:", e)
-
+        print("❌ WhatsApp Error:", e)
 
 # =====================================================
-# TEMP STORAGE (Webhook Messages)
+# TEMP STORAGE
 # =====================================================
 
 leave_requests = []
-
 
 @app.route("/webhook", methods=["POST"])
 def whatsapp_webhook():
@@ -172,9 +164,8 @@ def whatsapp_webhook():
 
     return "Received", 200
 
-
 # =====================================================
-# WARDEN PANEL
+# HOME
 # =====================================================
 
 @app.route("/", methods=["GET", "POST"])
@@ -183,7 +174,6 @@ def home():
 
     if request.method == "POST":
         roll = request.form.get("roll")
-
         if roll:
             student_data = get_student_details(roll)
 
@@ -192,7 +182,6 @@ def home():
         requests=leave_requests,
         student=student_data
     )
-
 
 # =====================================================
 # APPROVE / REJECT
@@ -206,8 +195,9 @@ def approve():
     start = request.form.get("start")
     end = request.form.get("end")
     days = request.form.get("days")
-    principal = request.form.get("principal")
     action = request.form.get("action")
+
+    print("🔍 Action:", action)
 
     student = get_student_details(roll_number)
 
@@ -218,27 +208,27 @@ def approve():
     department = student["department"]
     room = student["room"]
     student_phone = student["student_phone"]
-    parent_phone = student["parent_phone"]
 
-    # SEND ONLY IF APPROVED
-    if action == "Approved":
+    # ✅ FIXED condition
+    if action and action.lower() == "approved":
 
-        for number in [parent_phone, principal, student_phone]:
-            if number:
-                send_whatsapp_message(
-                    number,
-                    action,
-                    name,
-                    roll_number,
-                    department,
-                    room,
-                    reason,
-                    days,
-                    start,
-                    end
-                )
+        print("🚀 Sending WhatsApp...")
 
-    # SAVE TO GOOGLE SHEETS
+        # 👉 TEST with your own number first
+        send_whatsapp_message(
+            student_phone,
+            action,
+            name,
+            roll_number,
+            department,
+            room,
+            reason,
+            days,
+            start,
+            end
+        )
+
+    # SAVE TO SHEETS
     save_to_google_sheets([
         roll_number,
         name,
@@ -248,7 +238,6 @@ def approve():
         days,
         start,
         end,
-        parent_phone,
         student_phone,
         action,
         datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -256,9 +245,8 @@ def approve():
 
     return redirect("/")
 
-
 # =====================================================
-# ADD / UPDATE STUDENT
+# ADD STUDENT
 # =====================================================
 
 @app.route("/add-student", methods=["POST"])
@@ -289,7 +277,6 @@ def add_student():
     conn.close()
 
     return redirect("/")
-
 
 # =====================================================
 # RUN
