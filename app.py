@@ -124,29 +124,26 @@ def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, s
     }
 
     data = {
-        "messaging_product": "whatsapp",
-        "to": format_phone(phone),
-        "type": "template",
-        "template": {
-            "name": "leave_status",
-            "language": {"code": "en"},
-            "components": [{
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": action},
-                    {"type": "text", "text": name},
-                    {"type": "text", "text": roll},
-                    {"type": "text", "text": dept},
-                    {"type": "text", "text": room},
-                    {"type": "text", "text": reason},
-                    {"type": "text", "text": days},
-                    {"type": "text", "text": start},
-                    {"type": "text", "text": end}
-                ]
-            }]
-        }
-    }
+    "messaging_product": "whatsapp",
+    "to": format_phone(phone),
+    "type": "text",
+    "text": {
+        "body": f"""Leave {action}
 
+Student: {name}
+Roll: {roll}
+Dept: {dept}
+Room: {room}
+
+Reason: {reason}
+Days: {days}
+Start: {start}
+End: {end}
+
+- Hostel Management
+"""
+    }
+}
     try:
         res = requests.post(url, headers=headers, json=data)
         print("WhatsApp Status:", res.status_code)
