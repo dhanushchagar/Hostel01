@@ -123,7 +123,7 @@ def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, s
             "to": formatted,
             "type": "template",
             "template": {
-                "name": "leave_approval",  # Template name from Meta Dashboard
+                "name": "leave_status",  # Template name from Meta Dashboard
                 "language": {"code": "en_US"},
                 "components": [
                     {
@@ -258,7 +258,7 @@ def approve():
             days,
             start,
             end,
-            use_template=False  # Change to True after template approval
+            use_template=True  # Change to True after template approval
         )
 
         # Optional: also send to parent
