@@ -104,24 +104,53 @@ def format_phone(phone):
         phone = "91" + phone
     return phone
 
-def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end):
-
+def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end, use_template=False):
+    """
+    Sends WhatsApp message via Meta Cloud API.
+    If use_template=True, will send a template message instead of normal text.
+    """
+    formatted = format_phone(phone)
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
-
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    formatted = format_phone(phone)
-    print("📱 Sending to:", formatted)
-
-    data = {
-        "messaging_product": "whatsapp",
-        "to": formatted,
-        "type": "text",
-        "text": {
-            "body": f"""Leave {action}
+    if use_template:
+        # TEMPLATE MESSAGE STRUCTURE
+        data = {
+            "messaging_product": "whatsapp",
+            "to": formatted,
+            "type": "template",
+            "template": {
+                "name": "leave_approval",  # Template name from Meta Dashboard
+                "language": {"code": "en_US"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": name},
+                            {"type": "text", "text": roll},
+                            {"type": "text", "text": dept},
+                            {"type": "text", "text": room},
+                            {"type": "text", "text": reason},
+                            {"type": "text", "text": days},
+                            {"type": "text", "text": start},
+                            {"type": "text", "text": end},
+                            {"type": "text", "text": action}
+                        ]
+                    }
+                ]
+            }
+        }
+    else:
+        # NORMAL TEXT MESSAGE
+        data = {
+            "messaging_product": "whatsapp",
+            "to": formatted,
+            "type": "text",
+            "text": {
+                "body": f"""Leave {action}
 
 Student: {name}
 Roll: {roll}
@@ -135,11 +164,14 @@ End: {end}
 
 - Hostel Management
 """
+            }
         }
-    }
 
+    # SEND REQUEST
     try:
-        res = requests.post(url, headers=headers, json=data)
+        print("📱 Sending WhatsApp to:", formatted)
+        print("📨 URL:", url)
+        res = requests.post(url, headers=headers, json=data, timeout=10)
         print("✅ Status:", res.status_code)
         print("📨 Response:", res.text)
     except Exception as e:
@@ -208,13 +240,13 @@ def approve():
     department = student["department"]
     room = student["room"]
     student_phone = student["student_phone"]
+    parent_phone = student["parent_phone"]
 
-    # ✅ FIXED condition
+    # SEND WHATSAPP MESSAGE
     if action and action.lower() == "approved":
-
         print("🚀 Sending WhatsApp...")
 
-        # 👉 TEST with your own number first
+        # If template approved, set use_template=True
         send_whatsapp_message(
             student_phone,
             action,
@@ -225,10 +257,27 @@ def approve():
             reason,
             days,
             start,
-            end
+            end,
+            use_template=False  # Change to True after template approval
         )
 
-    # SAVE TO SHEETS
+        # Optional: also send to parent
+        if parent_phone:
+            send_whatsapp_message(
+                parent_phone,
+                action,
+                name,
+                roll_number,
+                department,
+                room,
+                reason,
+                days,
+                start,
+                end,
+                use_template=False  # Change to True after template approval
+            )
+
+    # SAVE TO GOOGLE SHEETS
     save_to_google_sheets([
         roll_number,
         name,
@@ -239,6 +288,7 @@ def approve():
         start,
         end,
         student_phone,
+        parent_phone,
         action,
         datetime.now().strftime("%Y-%m-%d %H:%M")
     ])
@@ -283,4 +333,4 @@ def add_student():
 # =====================================================
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
