@@ -99,9 +99,14 @@ WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
 
 def format_phone(phone):
-    phone = phone.strip().replace("+", "")
+    phone = phone.strip().replace("+", "").replace(" ", "")
+    
+    if phone.startswith("0"):
+        phone = phone[1:]
+        
     if not phone.startswith("91"):
         phone = "91" + phone
+        
     return phone
 
 def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end, use_template=False):
