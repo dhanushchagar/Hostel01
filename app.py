@@ -136,8 +136,7 @@ def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, s
                             {"type": "text", "text": reason},
                             {"type": "text", "text": days},
                             {"type": "text", "text": start},
-                            {"type": "text", "text": end},
-                            {"type": "text", "text": action}
+                            {"type": "text", "text": end}
                         ]
                     }
                 ]
