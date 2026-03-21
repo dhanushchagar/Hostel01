@@ -278,7 +278,7 @@ def approve():
                 days,
                 start,
                 end,
-                use_template=False  # Change to True after template approval
+                use_template=True # Change to True after template approval
             )
 
     # SAVE TO GOOGLE SHEETS
