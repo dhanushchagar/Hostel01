@@ -128,8 +128,8 @@ def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, s
             "to": formatted,
             "type": "template",
             "template": {
-                "name": "leave_status",  # Template name from Meta Dashboard
-                "language": {"code": "en"},
+                "name": "hostel_details",  # Template name from Meta Dashboard
+                "language": {"code": "en_US"},
                 "components": [
                     {
                         "type": "body",
