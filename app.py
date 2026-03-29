@@ -335,6 +335,9 @@ def add_student():
 # =====================================================
 # RUN
 # =====================================================
+@app.route('/privacy-policy')
+def privacy():
+    return "This app (Hostel Leave System) collects student data only for leave approval and communication with parents. Data is सुरक्षित and not shared."
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
