@@ -129,7 +129,7 @@ def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, s
             "type": "template",
             "template": {
                 "name": "hostel_details",  # Template name from Meta Dashboard
-                "language": {"code": "en_US"},
+                "language": {"code": "en"},
                 "components": [
                     {
                         "type": "body",
