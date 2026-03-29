@@ -98,86 +98,76 @@ def save_to_google_sheets(data):
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
 
+def safe(val):
+    return str(val) if val else "N/A"
+
 def format_phone(phone):
     phone = phone.strip().replace("+", "").replace(" ", "")
-    
+
     if phone.startswith("0"):
         phone = phone[1:]
-        
+
     if not phone.startswith("91"):
         phone = "91" + phone
-        
+
+    if len(phone) != 12:
+        print("❌ Invalid phone:", phone)
+
     return phone
 
-def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end, use_template=False):
-    """
-    Sends WhatsApp message via Meta Cloud API.
-    If use_template=True, will send a template message instead of normal text.
-    """
+def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
+
     formatted = format_phone(phone)
+
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    if use_template:
-        # TEMPLATE MESSAGE STRUCTURE
-        data = {
-            "messaging_product": "whatsapp",
-            "to": formatted,
-            "type": "template",
-            "template": {
-                "name": "hostel_details",  # Template name from Meta Dashboard
-                "language": {"code": "en"},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": [
-                            {"type": "text", "text": name},
-                            {"type": "text", "text": roll},
-                            {"type": "text", "text": dept},
-                            {"type": "text", "text": room},
-                            {"type": "text", "text": reason},
-                            {"type": "text", "text": days},
-                            {"type": "text", "text": start},
-                            {"type": "text", "text": end}
-                        ]
-                    }
-                ]
-            }
+    # TEMPLATE MESSAGE
+    data = {
+        "messaging_product": "whatsapp",
+        "to": formatted,
+        "type": "template",
+        "template": {
+            "name": "hostel_details",
+            "language": {"code": "en"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": safe(name)},
+                        {"type": "text", "text": safe(roll)},
+                        {"type": "text", "text": safe(dept)},
+                        {"type": "text", "text": safe(room)},
+                        {"type": "text", "text": safe(reason)},
+                        {"type": "text", "text": safe(days)},
+                        {"type": "text", "text": safe(start)},
+                        {"type": "text", "text": safe(end)}
+                    ]
+                }
+            ]
         }
-    else:
-        # NORMAL TEXT MESSAGE
-        data = {
-            "messaging_product": "whatsapp",
-            "to": formatted,
-            "type": "text",
-            "text": {
-                "body": f"""Leave {action}
+    }
 
-Student: {name}
-Roll: {roll}
-Dept: {dept}
-Room: {room}
-
-Reason: {reason}
-Days: {days}
-Start: {start}
-End: {end}
-
-- Hostel Management
-"""
-            }
-        }
-
-    # SEND REQUEST
     try:
         print("📱 Sending WhatsApp to:", formatted)
-        print("📨 URL:", url)
+        print("📦 Payload:", json.dumps(data, indent=2))
+
         res = requests.post(url, headers=headers, json=data, timeout=10)
+
         print("✅ Status:", res.status_code)
         print("📨 Response:", res.text)
+
+        response_json = res.json()
+
+        if "messages" in response_json:
+            print("✅ Message accepted by WhatsApp")
+        else:
+            print("❌ Message failed:", response_json)
+
     except Exception as e:
         print("❌ WhatsApp Error:", e)
 
@@ -233,8 +223,6 @@ def approve():
     days = request.form.get("days")
     action = request.form.get("action")
 
-    print("🔍 Action:", action)
-
     student = get_student_details(roll_number)
 
     if not student:
@@ -246,55 +234,28 @@ def approve():
     student_phone = student["student_phone"]
     parent_phone = student["parent_phone"]
 
-    # SEND WHATSAPP MESSAGE
     if action and action.lower() == "approved":
         print("🚀 Sending WhatsApp...")
 
-        # If template approved, set use_template=True
+        # Send to student
         send_whatsapp_message(
-            student_phone,
-            action,
-            name,
-            roll_number,
-            department,
-            room,
-            reason,
-            days,
-            start,
-            end,
-            use_template=True  # Change to True after template approval
+            student_phone, action, name, roll_number,
+            department, room, reason, days, start, end
         )
 
-        # Optional: also send to parent
-        if parent_phone:
+        # Send to parent (avoid duplicate)
+        if parent_phone and parent_phone != student_phone:
             send_whatsapp_message(
-                parent_phone,
-                action,
-                name,
-                roll_number,
-                department,
-                room,
-                reason,
-                days,
-                start,
-                end,
-                use_template=True # Change to True after template approval
+                parent_phone, action, name, roll_number,
+                department, room, reason, days, start, end
             )
 
     # SAVE TO GOOGLE SHEETS
     save_to_google_sheets([
-        roll_number,
-        name,
-        department,
-        room,
-        reason,
-        days,
-        start,
-        end,
-        student_phone,
-        parent_phone,
-        action,
-        datetime.now().strftime("%Y-%m-%d %H:%M")
+        roll_number, name, department, room,
+        reason, days, start, end,
+        student_phone, parent_phone,
+        action, datetime.now().strftime("%Y-%m-%d %H:%M")
     ])
 
     return redirect("/")
@@ -333,11 +294,16 @@ def add_student():
     return redirect("/")
 
 # =====================================================
-# RUN
+# PRIVACY POLICY
 # =====================================================
+
 @app.route('/privacy-policy')
 def privacy():
-    return "This app (Hostel Leave System) collects student data only for leave approval and communication with parents. Data is सुरक्षित and not shared."
+    return "This app (Hostel Leave System) collects student data only for leave approval and communication."
+
+# =====================================================
+# RUN
+# =====================================================
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
