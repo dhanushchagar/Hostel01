@@ -270,7 +270,7 @@ def approve():
     start,
     end
 )
-        if student["parent_phone"]:
+    if student["parent_phone"]:
             send_whatsapp(
     student["parent_phone"],
     roll,
