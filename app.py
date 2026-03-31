@@ -1,6 +1,5 @@
 import os
 import requests
-from datetime import datetime
 from flask import Flask, request, render_template, redirect, session
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -60,6 +59,30 @@ def init_db():
 init_db()
 
 # =========================
+# PHONE FORMAT (FIXED)
+# =========================
+
+def format_phone(phone):
+    phone = str(phone).strip()
+
+    # keep only digits
+    phone = ''.join(filter(str.isdigit, phone))
+
+    # remove leading 0
+    if phone.startswith("0"):
+        phone = phone[1:]
+
+    # ensure India code
+    if not phone.startswith("91"):
+        phone = "91" + phone
+
+    # validate length
+    if len(phone) != 12:
+        print("⚠️ Invalid phone number:", phone)
+
+    return phone
+
+# =========================
 # LOGIN
 # =========================
 
@@ -79,21 +102,6 @@ def logout():
     return redirect("/login")
 
 # =========================
-# FORMAT PHONE
-# =========================
-
-def format_phone(phone):
-    phone = phone.strip().replace("+", "").replace(" ", "")
-
-    if phone.startswith("0"):
-        phone = phone[1:]
-
-    if not phone.startswith("91"):
-        phone = "91" + phone
-
-    return phone
-
-# =========================
 # GET STUDENT
 # =========================
 
@@ -111,7 +119,7 @@ def get_student(roll):
     return data
 
 # =========================
-# WHATSAPP TEMPLATE MESSAGE
+# WHATSAPP SEND
 # =========================
 
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
@@ -120,6 +128,8 @@ PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 def send_whatsapp(phone, roll, name, department, room, reason, days, start, end):
     phone = format_phone(phone)
 
+    print("📱 Sending WhatsApp to:", phone)
+
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
 
     payload = {
@@ -127,22 +137,21 @@ def send_whatsapp(phone, roll, name, department, room, reason, days, start, end)
         "to": phone,
         "type": "template",
         "template": {
-            "name": "hostel_details",  # MUST match your Meta template
+            "name": "hostel_details",
             "language": {"code": "en"},
             "components": [
                 {
                     "type": "body",
                     "parameters": [
-    {"type": "text", "text": name},          # 1
-    {"type": "text", "text": roll},          # 2
-    {"type": "text", "text": department},    # 3
-    {"type": "text", "text": room},          # 4
-    {"type": "text", "text": reason},        # 5
-    {"type": "text", "text": str(days)},     # 6
-    {"type": "text", "text": start},         # 7
-    {"type": "text", "text": end}            # 8
-]
-                    
+                        {"type": "text", "text": name},
+                        {"type": "text", "text": roll},
+                        {"type": "text", "text": department},
+                        {"type": "text", "text": room},
+                        {"type": "text", "text": reason},
+                        {"type": "text", "text": str(days)},
+                        {"type": "text", "text": start},
+                        {"type": "text", "text": end}
+                    ]
                 }
             ]
         }
@@ -153,16 +162,21 @@ def send_whatsapp(phone, roll, name, department, room, reason, days, start, end)
         "Content-Type": "application/json"
     }
 
-    res = requests.post(url, headers=headers, json=payload)
-    response = res.json()
+    try:
+        res = requests.post(url, headers=headers, json=payload)
+        response = res.json()
 
-    print("📨 WhatsApp Response:", response)
+        print("📨 WhatsApp Response:", response)
 
-    status = "failed"
-    if "messages" in response:
-        status = "sent"
+        status = "failed"
+        if "messages" in response:
+            status = "sent"
 
-    # SAVE STATUS
+    except Exception as e:
+        print("❌ Error sending WhatsApp:", e)
+        status = "error"
+
+    # SAVE LOG
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
@@ -192,7 +206,6 @@ def home():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
 
-    # STATS
     cur.execute("SELECT COUNT(*) FROM students")
     students_count = cur.fetchone()[0]
 
@@ -205,7 +218,6 @@ def home():
     cur.execute("SELECT COUNT(*) FROM message_logs WHERE status='sent'")
     messages = cur.fetchone()[0]
 
-    # MESSAGE LIST
     cur.execute("""
         SELECT roll_number, phone, status, created_at 
         FROM message_logs 
@@ -259,39 +271,43 @@ def approve():
     conn.close()
 
     if action == "Approved":
-      send_whatsapp(
-    student["student_phone"],
-    roll,
-    student["name"],
-    student["department"],
-    student["room"],
-    reason,
-    days,
-    start,
-    end
-)
-    if student["parent_phone"]:
+        send_whatsapp(
+            student["student_phone"],
+            roll,
+            student["name"],
+            student["department"],
+            student["room"],
+            reason,
+            days,
+            start,
+            end
+        )
+
+        if student["parent_phone"]:
             send_whatsapp(
-    student["parent_phone"],
-    roll,
-    student["name"],
-    student["department"],
-    student["room"],
-    reason,
-    days,
-    start,
-    end
-)
+                student["parent_phone"],
+                roll,
+                student["name"],
+                student["department"],
+                student["room"],
+                reason,
+                days,
+                start,
+                end
+            )
 
     return redirect("/")
 
 # =========================
-# ADD STUDENT
+# ADD STUDENT (FIXED)
 # =========================
 
 @app.route("/add-student", methods=["POST"])
 def add_student():
     roll = request.form.get("roll").strip().upper()
+
+    student_phone = format_phone(request.form["student_phone"])
+    parent_phone = format_phone(request.form["parent_phone"])
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -309,8 +325,8 @@ def add_student():
         request.form["name"],
         request.form["department"],
         request.form["room"],
-        request.form["student_phone"],
-        request.form["parent_phone"]
+        student_phone,
+        parent_phone
     ))
 
     conn.commit()
