@@ -142,7 +142,7 @@ def send_whatsapp(phone, roll, name, department, room, reason, days, start, end)
     {"type": "text", "text": start},         # 7
     {"type": "text", "text": end}            # 8
 ]
-                    ]
+                    
                 }
             ]
         }
