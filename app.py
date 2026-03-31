@@ -79,11 +79,26 @@ def logout():
     return redirect("/login")
 
 # =========================
-# GET STUDENT (FIXED)
+# FORMAT PHONE
+# =========================
+
+def format_phone(phone):
+    phone = phone.strip().replace("+", "").replace(" ", "")
+
+    if phone.startswith("0"):
+        phone = phone[1:]
+
+    if not phone.startswith("91"):
+        phone = "91" + phone
+
+    return phone
+
+# =========================
+# GET STUDENT
 # =========================
 
 def get_student(roll):
-    roll = roll.strip().upper()   # ✅ FIX
+    roll = roll.strip().upper()
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
@@ -96,20 +111,38 @@ def get_student(roll):
     return data
 
 # =========================
-# WHATSAPP
+# WHATSAPP TEMPLATE MESSAGE
 # =========================
 
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
-def send_whatsapp(phone, roll):
+def send_whatsapp(phone, roll, name, reason, days, start, end):
+    phone = format_phone(phone)
+
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
 
     payload = {
         "messaging_product": "whatsapp",
         "to": phone,
-        "type": "text",
-        "text": {"body": "Leave Approved"}
+        "type": "template",
+        "template": {
+            "name": "hostel_details",  # MUST match your Meta template
+            "language": {"code": "en"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": name},
+                        {"type": "text", "text": roll},
+                        {"type": "text", "text": reason},
+                        {"type": "text", "text": str(days)},
+                        {"type": "text", "text": start},
+                        {"type": "text", "text": end}
+                    ]
+                }
+            ]
+        }
     }
 
     headers = {
@@ -118,10 +151,12 @@ def send_whatsapp(phone, roll):
     }
 
     res = requests.post(url, headers=headers, json=payload)
-    data = res.json()
+    response = res.json()
+
+    print("📨 WhatsApp Response:", response)
 
     status = "failed"
-    if "messages" in data:
+    if "messages" in response:
         status = "sent"
 
     # SAVE STATUS
@@ -195,7 +230,7 @@ def home():
 
 @app.route("/approve", methods=["POST"])
 def approve():
-    roll = request.form.get("roll").strip().upper()  # ✅ FIX
+    roll = request.form.get("roll").strip().upper()
     reason = request.form.get("reason")
     start = request.form.get("start")
     end = request.form.get("end")
@@ -210,7 +245,6 @@ def approve():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # SAVE LEAVE
     cur.execute("""
     INSERT INTO leave_requests 
     (roll_number, reason, start_date, end_date, days, status)
@@ -221,11 +255,11 @@ def approve():
     cur.close()
     conn.close()
 
-    # SEND MESSAGE
     if action == "Approved":
-        send_whatsapp(student["student_phone"], roll)
+        send_whatsapp(student["student_phone"], roll, student["name"], reason, days, start, end)
+
         if student["parent_phone"]:
-            send_whatsapp(student["parent_phone"], roll)
+            send_whatsapp(student["parent_phone"], roll, student["name"], reason, days, start, end)
 
     return redirect("/")
 
@@ -235,7 +269,7 @@ def approve():
 
 @app.route("/add-student", methods=["POST"])
 def add_student():
-    roll = request.form.get("roll").strip().upper()  # ✅ FIX
+    roll = request.form.get("roll").strip().upper()
 
     conn = get_db_connection()
     cur = conn.cursor()
