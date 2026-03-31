@@ -1,15 +1,9 @@
 import os
-import json
-import time
 import requests
 from datetime import datetime
-
 from flask import Flask, request, render_template, redirect, session
 import psycopg2
 from psycopg2.extras import DictCursor
-import gspread
-from gspread.exceptions import APIError
-from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
 app.secret_key = "hostel-secret"
@@ -85,10 +79,12 @@ def logout():
     return redirect("/login")
 
 # =========================
-# STUDENT FETCH
+# GET STUDENT (FIXED)
 # =========================
 
 def get_student(roll):
+    roll = roll.strip().upper()   # ✅ FIX
+
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
 
@@ -152,11 +148,13 @@ def home():
 
     if request.method == "POST":
         roll = request.form.get("roll")
-        student = get_student(roll)
+        if roll:
+            student = get_student(roll)
 
     conn = get_db_connection()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=DictCursor)
 
+    # STATS
     cur.execute("SELECT COUNT(*) FROM students")
     students_count = cur.fetchone()[0]
 
@@ -169,6 +167,15 @@ def home():
     cur.execute("SELECT COUNT(*) FROM message_logs WHERE status='sent'")
     messages = cur.fetchone()[0]
 
+    # MESSAGE LIST
+    cur.execute("""
+        SELECT roll_number, phone, status, created_at 
+        FROM message_logs 
+        ORDER BY created_at DESC 
+        LIMIT 10
+    """)
+    messages_list = cur.fetchall()
+
     cur.close()
     conn.close()
 
@@ -178,7 +185,8 @@ def home():
         students_count=students_count,
         approved_count=approved,
         rejected_count=rejected,
-        messages_sent=messages
+        messages_sent=messages,
+        messages_list=messages_list
     )
 
 # =========================
@@ -187,7 +195,7 @@ def home():
 
 @app.route("/approve", methods=["POST"])
 def approve():
-    roll = request.form.get("roll")
+    roll = request.form.get("roll").strip().upper()  # ✅ FIX
     reason = request.form.get("reason")
     start = request.form.get("start")
     end = request.form.get("end")
@@ -227,6 +235,8 @@ def approve():
 
 @app.route("/add-student", methods=["POST"])
 def add_student():
+    roll = request.form.get("roll").strip().upper()  # ✅ FIX
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -239,7 +249,7 @@ def add_student():
         student_phone=EXCLUDED.student_phone,
         parent_phone=EXCLUDED.parent_phone
     """, (
-        request.form["roll"],
+        roll,
         request.form["name"],
         request.form["department"],
         request.form["room"],
