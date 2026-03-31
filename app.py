@@ -5,7 +5,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
-app.secret_key = "hostel-secret"
+app.secret_key = os.environ.get("SECRET_KEY", "hostel-secret")
 
 # =========================
 # DATABASE
@@ -59,7 +59,7 @@ def init_db():
 init_db()
 
 # =========================
-# PHONE FORMAT (FIXED)
+# PHONE FORMAT
 # =========================
 
 def format_phone(phone):
@@ -76,9 +76,8 @@ def format_phone(phone):
     if not phone.startswith("91"):
         phone = "91" + phone
 
-    # validate length
     if len(phone) != 12:
-        print("⚠️ Invalid phone number:", phone)
+        print("⚠️ Invalid phone:", phone)
 
     return phone
 
@@ -240,7 +239,7 @@ def home():
     )
 
 # =========================
-# APPROVE
+# APPROVE / REJECT
 # =========================
 
 @app.route("/approve", methods=["POST"])
@@ -251,6 +250,8 @@ def approve():
     end = request.form.get("end")
     days = request.form.get("days")
     action = request.form.get("action")
+
+    print("👉 Action:", action)
 
     student = get_student(roll)
 
@@ -270,7 +271,10 @@ def approve():
     cur.close()
     conn.close()
 
-    if action == "Approved":
+    # ✅ FIXED CONDITION
+    if action and action.strip().lower() == "approved":
+        print("🚀 Sending WhatsApp...")
+
         send_whatsapp(
             student["student_phone"],
             roll,
@@ -299,7 +303,7 @@ def approve():
     return redirect("/")
 
 # =========================
-# ADD STUDENT (FIXED)
+# ADD STUDENT
 # =========================
 
 @app.route("/add-student", methods=["POST"])
