@@ -117,7 +117,7 @@ def get_student(roll):
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
-def send_whatsapp(phone, roll, name, reason, days, start, end):
+def send_whatsapp(phone, roll, name, department, room, reason, days, start, end):
     phone = format_phone(phone)
 
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
@@ -133,12 +133,15 @@ def send_whatsapp(phone, roll, name, reason, days, start, end):
                 {
                     "type": "body",
                     "parameters": [
-                        {"type": "text", "text": name},
-                        {"type": "text", "text": roll},
-                        {"type": "text", "text": reason},
-                        {"type": "text", "text": str(days)},
-                        {"type": "text", "text": start},
-                        {"type": "text", "text": end}
+    {"type": "text", "text": name},          # 1
+    {"type": "text", "text": roll},          # 2
+    {"type": "text", "text": department},    # 3
+    {"type": "text", "text": room},          # 4
+    {"type": "text", "text": reason},        # 5
+    {"type": "text", "text": str(days)},     # 6
+    {"type": "text", "text": start},         # 7
+    {"type": "text", "text": end}            # 8
+]
                     ]
                 }
             ]
@@ -256,10 +259,29 @@ def approve():
     conn.close()
 
     if action == "Approved":
-        send_whatsapp(student["student_phone"], roll, student["name"], reason, days, start, end)
-
+      send_whatsapp(
+    student["student_phone"],
+    roll,
+    student["name"],
+    student["department"],
+    student["room"],
+    reason,
+    days,
+    start,
+    end
+)
         if student["parent_phone"]:
-            send_whatsapp(student["parent_phone"], roll, student["name"], reason, days, start, end)
+            send_whatsapp(
+    student["parent_phone"],
+    roll,
+    student["name"],
+    student["department"],
+    student["room"],
+    reason,
+    days,
+    start,
+    end
+)
 
     return redirect("/")
 
