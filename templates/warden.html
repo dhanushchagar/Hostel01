@@ -1,28 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Vysya College Hostel - Dashboard</title>
+    <title>Hostel Leave Panel</title>
     <style>
         body {
             font-family: Arial;
             background-color: #2f4f88;
             color: white;
             text-align: center;
-        }
-
-        .container {
-            width: 90%;
-            margin: auto;
-        }
-
-        .card {
-            display: inline-block;
-            background: white;
-            color: black;
-            padding: 15px;
-            margin: 10px;
-            border-radius: 10px;
-            width: 200px;
         }
 
         form {
@@ -36,34 +21,12 @@
 
         input {
             width: 90%;
-            padding: 6px;
-            margin: 5px;
+            padding: 5px;
         }
 
         button {
-            padding: 8px 15px;
+            padding: 6px 12px;
             margin: 5px;
-            cursor: pointer;
-        }
-
-        .approve {
-            background-color: green;
-            color: white;
-            border: none;
-        }
-
-        .reject {
-            background-color: red;
-            color: white;
-            border: none;
-        }
-
-        .logout {
-            background: black;
-            color: white;
-            padding: 8px 15px;
-            text-decoration: none;
-            border-radius: 5px;
         }
 
         hr {
@@ -71,127 +34,97 @@
         }
     </style>
 </head>
-
 <body>
 
-<div class="container">
+<h2>Leave Requests</h2>
 
-    <h1>VYSYA COLLEGE HOSTEL</h1>
+{% for req in requests %}
+    <p><b>{{ req.sender }}</b> - {{ req.message }} ({{ req.time }})</p>
+{% endfor %}
 
-    <!-- DASHBOARD -->
-    <h2>Dashboard</h2>
+<hr>
 
-    <div class="card">
-        <h3>Total Students</h3>
-        <p>{{ students_count }}</p>
-    </div>
+<h2>Approve / Reject Leave</h2>
 
-    <div class="card">
-        <h3>Approved</h3>
-        <p>{{ approved_count }}</p>
-    </div>
+<form method="POST" action="/">
 
-    <div class="card">
-        <h3>Rejected</h3>
-        <p>{{ rejected_count }}</p>
-    </div>
+    Roll Number:<br>
+    <input type="text" name="roll" required><br><br>
 
-    <div class="card">
-        <h3>Messages Sent</h3>
-        <p>{{ messages_sent }}</p>
-    </div>
+    <button type="submit">Fetch Student</button>
+</form>
 
-    <br>
-    <a href="/logout" class="logout">Logout</a>
+<hr>
 
-    <hr>
+{% if student %}
+<form method="POST" action="/approve">
+Roll Number:
+<input type="text" name="roll" value="{{ student.roll_number if student else '' }}" readonly><br><br>
 
-    <!-- FETCH STUDENT -->
-    <h2>Fetch Student</h2>
+Student Name:
+<input type="text" name="name" value="{{ student.name if student else '' }}" readonly><br><br>
 
-    <form method="POST" action="/">
-        Roll Number:<br>
-        <input type="text" name="roll" required><br>
-        <button type="submit">Fetch</button>
-    </form>
+Year & Department:
+<input type="text" name="department" value="{{ student.department if student else '' }}" readonly><br><br>
 
-    <hr>
+Room:
+<input type="text" name="room" value="{{ student.room if student else '' }}" readonly><br><br>
 
-    <!-- APPROVE / REJECT -->
-    {% if student %}
-    <h2>Approve / Reject Leave</h2>
+Student Phone:
+<input type="text" name="student_phone" value="{{ student.student_phone if student else '' }}" readonly><br><br>
 
-    <form method="POST" action="/approve">
+Parent Phone:
+<input type="text" name="parent_phone" value="{{ student.parent_phone if student else '' }}" readonly><br><br>
 
-        Roll Number:
-        <input type="text" name="roll" value="{{ student.roll_number }}" readonly><br>
+Principal Phone:
+<input type="text" name="principal" value="9994415730"><br><br>
 
-        Name:
-        <input type="text" value="{{ student.name }}" readonly><br>
+    Reason:<br>
+    <input type="text" name="reason" required><br><br>
 
-        Department:
-        <input type="text" value="{{ student.department }}" readonly><br>
+    Days:<br>
+    <input type="number" name="days" required><br><br>
 
-        Room:
-        <input type="text" value="{{ student.room }}" readonly><br>
+    Start Date:<br>
+    <input type="date" name="start" required><br><br>
 
-        Student Phone:
-        <input type="text" value="{{ student.student_phone }}" readonly><br>
+    End Date:<br>
+    <input type="date" name="end" required><br><br>
 
-        Parent Phone:
-        <input type="text" value="{{ student.parent_phone }}" readonly><br>
+    <button type="submit" name="action" value="Approved">Approve</button>
+    <button type="submit" name="action" value="Rejected">Reject</button>
+</form>
+{% endif %}
+<hr>
 
-        <br>
+<h2>Add Student (Admin)</h2>
 
-        Reason:
-        <input type="text" name="reason" required><br>
+<form method="POST" action="/add-student">
+    Roll Number:<br>
+    <input type="text" name="roll" required><br><br>
 
-        Days:
-        <input type="number" name="days" required><br>
+    Name:<br>
+    <input type="text" name="name" required><br><br>
 
-        Start Date:
-        <input type="date" name="start" required><br>
+    Department & Year:<br>
+    <input type="text" name="department" required><br><br>
 
-        End Date:
-        <input type="date" name="end" required><br>
+    Room:<br>
+    <input type="text" name="room"><br><br>
 
-        <br>
+    Student Phone:<br>
+    <input type="text" name="student_phone"><br><br>
 
-        <button type="submit" name="action" value="Approved" class="approve">Approve</button>
-        <button type="submit" name="action" value="Rejected" class="reject">Reject</button>
+    Parent Phone:<br>
+    <input type="text" name="parent_phone"><br><br>
 
-    </form>
-    {% endif %}
-
-    <hr>
-
-    <!-- ADD STUDENT -->
-    <h2>Add / Update Student</h2>
-
-    <form method="POST" action="/add-student">
-
-        Roll Number:
-        <input type="text" name="roll" required><br>
-
-        Name:
-        <input type="text" name="name" required><br>
-
-        Department:
-        <input type="text" name="department" required><br>
-
-        Room:
-        <input type="text" name="room"><br>
-
-        Student Phone:
-        <input type="text" name="student_phone"><br>
-
-        Parent Phone:
-        <input type="text" name="parent_phone"><br>
-
-        <button type="submit">Save Student</button>
-    </form>
-
-</div>
+    <button type="submit">Add / Update Student</button>
+</form>
 
 </body>
 </html>
+
+
+
+
+
