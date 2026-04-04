@@ -200,45 +200,75 @@ def webhook():
             print("⚠️ Webhook error:", e)
 
         return "OK", 200
-@app.route("/")
-def dashboard():
+# =========================
+# LOGIN
+# =========================
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if username == "vysya" and password == "7818":
+            session["user"] = "admin"
+            return redirect("/")
+        else:
+            return "Invalid Login"
+
+    return render_template("login.html")
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect("/login")
+
+@app.route("/", methods=["GET", "POST"])
+def home():
+    if "user" not in session:
+        return redirect("/login")
+
+    student = None
+
+    if request.method == "POST":
+        roll = request.form.get("roll")
+        if roll:
+            student = get_student(roll)
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
 
-    cur.execute("""
-    SELECT roll_number, phone, status, created_at
-    FROM message_logs
-    ORDER BY created_at DESC
-    LIMIT 20
-    """)
+    cur.execute("SELECT COUNT(*) FROM students")
+    students_count = cur.fetchone()[0]
 
-    data = cur.fetchall()
+    cur.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Approved'")
+    approved = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Rejected'")
+    rejected = cur.fetchone()[0]
 
     cur.execute("SELECT COUNT(*) FROM message_logs WHERE status='sent'")
-    sent = cur.fetchone()[0]
+    messages = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM message_logs WHERE status='delivered'")
-    delivered = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM message_logs WHERE status='read'")
-    read = cur.fetchone()[0]
+    cur.execute("""
+        SELECT roll_number, phone, status, created_at 
+        FROM message_logs 
+        ORDER BY created_at DESC 
+        LIMIT 10
+    """)
+    messages_list = cur.fetchall()
 
     cur.close()
     conn.close()
 
     return render_template(
-        "dashboard.html",
-        logs=data,
-        sent=sent,
-        delivered=delivered,
-        read=read
+        "warden.html",
+        student=student,
+        students_count=students_count,
+        approved_count=approved,
+        rejected_count=rejected,
+        messages_sent=messages,
+        messages_list=messages_list
     )
-
-# =========================
-# TEST SEND
-# =========================
-
 @app.route("/send-test")
 def test():
     send_whatsapp("919999999999", "TEST01", "Demo Student")
