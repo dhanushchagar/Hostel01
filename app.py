@@ -1,8 +1,16 @@
 import os
+import json
+import time
 import requests
+from datetime import datetime
+
 from flask import Flask, request, render_template, redirect, session
 import psycopg2
 from psycopg2.extras import DictCursor
+
+import gspread
+from gspread.exceptions import APIError
+from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "hostel-secret")
@@ -59,25 +67,51 @@ def init_db():
 init_db()
 
 # =========================
+# GOOGLE SHEETS
+# =========================
+
+def save_to_google_sheets(data):
+    try:
+        creds_json = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
+
+        credentials = Credentials.from_service_account_info(
+            creds_json,
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ],
+        )
+
+        gc = gspread.authorize(credentials)
+
+        for attempt in range(3):
+            try:
+                sheet = gc.open("Hostel Leave Records").sheet1
+                sheet.append_row(data)
+                print("✅ Saved to Google Sheets")
+                return True
+            except APIError as e:
+                print("Google Sheets API error:", e)
+                time.sleep(3)
+
+    except Exception as e:
+        print("❌ Google Sheets Error:", e)
+
+    return False
+
+# =========================
 # PHONE FORMAT
 # =========================
 
 def format_phone(phone):
     phone = str(phone).strip()
-
-    # keep only digits
     phone = ''.join(filter(str.isdigit, phone))
 
-    # remove leading 0
     if phone.startswith("0"):
         phone = phone[1:]
 
-    # ensure India code
     if not phone.startswith("91"):
         phone = "91" + phone
-
-    if len(phone) != 12:
-        print("⚠️ Invalid phone:", phone)
 
     return phone
 
@@ -127,8 +161,6 @@ PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 def send_whatsapp(phone, roll, name, department, room, reason, days, start, end):
     phone = format_phone(phone)
 
-    print("📱 Sending WhatsApp to:", phone)
-
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
 
     payload = {
@@ -172,7 +204,7 @@ def send_whatsapp(phone, roll, name, department, room, reason, days, start, end)
             status = "sent"
 
     except Exception as e:
-        print("❌ Error sending WhatsApp:", e)
+        print("❌ WhatsApp Error:", e)
         status = "error"
 
     # SAVE LOG
@@ -251,13 +283,12 @@ def approve():
     days = request.form.get("days")
     action = request.form.get("action")
 
-    print("👉 Action:", action)
-
     student = get_student(roll)
 
     if not student:
         return "Student not found"
 
+    # SAVE TO DB
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -271,10 +302,24 @@ def approve():
     cur.close()
     conn.close()
 
-    # ✅ FIXED CONDITION
-    if action and action.strip().lower() == "approved":
-        print("🚀 Sending WhatsApp...")
+    # SAVE TO GOOGLE SHEETS
+    save_to_google_sheets([
+        roll,
+        student["name"],
+        student["department"],
+        student["room"],
+        reason,
+        days,
+        start,
+        end,
+        student["student_phone"],
+        student["parent_phone"],
+        action,
+        datetime.now().strftime("%Y-%m-%d %H:%M")
+    ])
 
+    # SEND WHATSAPP
+    if action and action.strip().lower() == "approved":
         send_whatsapp(
             student["student_phone"],
             roll,
