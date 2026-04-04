@@ -70,23 +70,29 @@ def send_whatsapp(phone, roll, name):
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
 
     payload = {
-        "messaging_product": "whatsapp",
-        "to": phone,
-        "type": "template",
-        "template": {
-            "name": "hostel_details",
-            "language": {"code": "en"},
-            "components": [
-                {
-                    "type": "body",
-                    "parameters": [
-                        {"type": "text", "text": name}
-                    ]
-                }
-            ]
-        }
+    "messaging_product": "whatsapp",
+    "to": phone,
+    "type": "template",
+    "template": {
+        "name": "hostel_details",
+        "language": {"code": "en"},
+        "components": [
+            {
+                "type": "body",
+                "parameters": [
+                    {"type": "text", "text": name},
+                    {"type": "text", "text": roll},
+                    {"type": "text", "text": "CSE"},
+                    {"type": "text", "text": "101"},
+                    {"type": "text", "text": "Test Reason"},
+                    {"type": "text", "text": "1"},
+                    {"type": "text", "text": "2026-04-04"},
+                    {"type": "text", "text": "2026-04-04"}
+                ]
+            }
+        ]
     }
-
+}
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
