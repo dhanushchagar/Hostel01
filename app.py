@@ -15,7 +15,7 @@ from google.oauth2.service_account import Credentials
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "hostel-secret")
 
-VERIFY_TOKEN = "hostel7818"
+VERIFY_TOKEN = "hostel123"
 
 # =========================
 # DATABASE
@@ -88,7 +88,7 @@ def send_whatsapp(phone, roll, name):
     }
 
     headers = {
-        "Authorization": f"Bearer {TOKEN},
+        "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
     }
 
@@ -130,51 +130,55 @@ def send_whatsapp(phone, roll, name):
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
 
-    # VERIFY
+    # ✅ VERIFY (FIXED)
     if request.method == "GET":
+        mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
 
-        if token == VERIFY_TOKEN:
-            return challenge
-        return "Verification failed", 403
+        print("MODE:", mode)
+        print("TOKEN:", token)
+        print("CHALLENGE:", challenge)
 
-    # RECEIVE STATUS UPDATE
-    data = request.get_json()
-    print("📩 Webhook:", data)
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            print("✅ WEBHOOK VERIFIED")
+            return challenge, 200
+        else:
+            print("❌ VERIFICATION FAILED")
+            return "Forbidden", 403
 
-    try:
-        statuses = data["entry"][0]["changes"][0]["value"].get("statuses")
+    # ✅ RECEIVE STATUS UPDATE
+    if request.method == "POST":
+        data = request.get_json()
+        print("📩 Webhook:", data)
 
-        if statuses:
-            for status in statuses:
-                message_id = status["id"]
-                status_text = status["status"]  # sent, delivered, read
+        try:
+            statuses = data["entry"][0]["changes"][0]["value"].get("statuses")
 
-                conn = get_db_connection()
-                cur = conn.cursor()
+            if statuses:
+                for status in statuses:
+                    message_id = status["id"]
+                    status_text = status["status"]
 
-                cur.execute("""
-                UPDATE message_logs
-                SET status=%s
-                WHERE message_id=%s
-                """, (status_text, message_id))
+                    conn = get_db_connection()
+                    cur = conn.cursor()
 
-                conn.commit()
-                cur.close()
-                conn.close()
+                    cur.execute("""
+                    UPDATE message_logs
+                    SET status=%s
+                    WHERE message_id=%s
+                    """, (status_text, message_id))
 
-                print(f"✅ Updated {message_id} → {status_text}")
+                    conn.commit()
+                    cur.close()
+                    conn.close()
 
-    except Exception as e:
-        print("⚠️ Webhook error:", e)
+                    print(f"✅ Updated {message_id} → {status_text}")
 
-    return "OK", 200
+        except Exception as e:
+            print("⚠️ Webhook error:", e)
 
-# =========================
-# DASHBOARD
-# =========================
-
+        return "OK", 200
 @app.route("/")
 def dashboard():
 
