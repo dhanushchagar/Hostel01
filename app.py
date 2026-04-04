@@ -64,6 +64,21 @@ def format_phone(phone):
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
+@app.route("/delete-student", methods=["POST"])
+def delete_student():
+    roll = request.form.get("roll").strip().upper()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM students WHERE roll_number=%s", (roll,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/")
+
 def send_whatsapp(phone, roll, name):
     phone = format_phone(phone)
 
