@@ -58,12 +58,30 @@
             border: none;
         }
 
+        .delete {
+            background-color: darkred;
+            color: white;
+            border: none;
+        }
+
         .logout {
             background: black;
             color: white;
             padding: 8px 15px;
             text-decoration: none;
             border-radius: 5px;
+        }
+
+        table {
+            margin: auto;
+            border-collapse: collapse;
+            background: white;
+            color: black;
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid black;
         }
 
         hr {
@@ -165,7 +183,7 @@
 
     <hr>
 
-    <!-- ADD STUDENT -->
+    <!-- ADD / UPDATE STUDENT -->
     <h2>Add / Update Student</h2>
 
     <form method="POST" action="/add-student">
@@ -190,6 +208,50 @@
 
         <button type="submit">Save Student</button>
     </form>
+
+    <hr>
+
+    <!-- DELETE STUDENT -->
+    <h2>Delete Student</h2>
+
+    <form method="POST" action="/delete-student">
+        Roll Number:
+        <input type="text" name="roll" required><br>
+        <button type="submit" class="delete">Delete</button>
+    </form>
+
+    <hr>
+
+    <!-- MESSAGE LOGS -->
+    <h2>Message Logs</h2>
+
+    <table>
+        <tr>
+            <th>Roll</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Time</th>
+        </tr>
+
+        {% for m in messages_list %}
+        <tr>
+            <td>{{ m.roll_number }}</td>
+            <td>{{ m.phone }}</td>
+            <td>
+                {% if m.status == "delivered" %}
+                    <span style="color:green;">Delivered</span>
+                {% elif m.status == "read" %}
+                    <span style="color:blue;">Read</span>
+                {% elif m.status == "failed" %}
+                    <span style="color:red;">Failed</span>
+                {% else %}
+                    {{ m.status }}
+                {% endif %}
+            </td>
+            <td>{{ m.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </table>
 
 </div>
 
