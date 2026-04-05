@@ -73,7 +73,13 @@ def format_phone(phone):
     if not phone.startswith("91"):
         phone = "91" + phone
     return phone
-
+    
+def safe(value):
+    """
+    Ensures the value is always a string and not None.
+    If None, replaces with "-"
+    """
+    return str(value) if value else "-"
 # =========================
 # WHATSAPP
 # =========================
