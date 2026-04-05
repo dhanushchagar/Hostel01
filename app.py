@@ -180,18 +180,22 @@ def get_sheet():
 @app.route("/approve", methods=["POST"])
 def approve():
     try:
+        # Get form data
         roll = request.form.get("roll").strip().upper()
         action = request.form.get("action")
-        reason = request.form.get("reason")
-        days = request.form.get("days")
-        start = request.form.get("start")
-        end = request.form.get("end")
+        reason = request.form.get("reason") or "-"
+        days = request.form.get("days") or "-"
+        start = request.form.get("start") or "-"
+        end = request.form.get("end") or "-"
 
+        # Fetch student from DB
         student = get_student(roll)
         if not student:
             return "Student not found"
 
-        # ✅ SAVE TO GOOGLE SHEET
+        # -----------------------------
+        # Save to Google Sheet
+        # -----------------------------
         sheet = get_sheet()
         sheet.append_row([
             student["name"],
@@ -205,32 +209,44 @@ def approve():
             action
         ])
 
-        # ✅ Send to parent
-        if action == "Approved" and student.get("parent_phone"):
-            send_whatsapp(
-                student["parent_phone"],
-                student,
-                reason,
-                days,
-                start,
-                end
-            )
+        # -----------------------------
+        # Send WhatsApp if approved
+        # -----------------------------
+        if action == "Approved":
+            # Send to parent
+            if student.get("parent_phone"):
+                send_whatsapp(
+                    student["parent_phone"],
+                    action,
+                    student["name"],
+                    roll,
+                    student["department"],
+                    student["room"],
+                    reason,
+                    days,
+                    start,
+                    end
+                )
 
-        # ✅ Send to student
-        if action == "Approved" and student.get("student_phone"):
-            send_whatsapp(
-                student["student_phone"],
-                student,
-                reason,
-                days,
-                start,
-                end
-            )
+            # Send to student
+            if student.get("student_phone"):
+                send_whatsapp(
+                    student["student_phone"],
+                    action,
+                    student["name"],
+                    roll,
+                    student["department"],
+                    student["room"],
+                    reason,
+                    days,
+                    start,
+                    end
+                )
 
         return redirect("/")
 
     except Exception as e:
-        print("❌ ERROR:", e)
+        print("❌ ERROR in /approve:", e)
         return "Error: " + str(e)
 
     
