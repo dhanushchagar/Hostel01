@@ -1,10 +1,13 @@
 import os
+import json
 import requests
-from datetime import datetime
 
 from flask import Flask, request, render_template, redirect, session
 import psycopg2
 from psycopg2.extras import DictCursor
+
+import gspread
+from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "hostel-secret")
@@ -21,7 +24,6 @@ def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # STUDENTS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
@@ -34,16 +36,6 @@ def init_db():
     );
     """)
 
-    # LEAVE REQUESTS TABLE
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS leave_requests (
-        id SERIAL PRIMARY KEY,
-        roll_number VARCHAR(20),
-        status VARCHAR(20)
-    );
-    """)
-
-    # MESSAGE LOGS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS message_logs (
         id SERIAL PRIMARY KEY,
@@ -59,11 +51,25 @@ def init_db():
     cur.close()
     conn.close()
 
-
 init_db()
 
 # =========================
-# HELPER FUNCTIONS
+# GOOGLE SHEETS
+# =========================
+
+def get_sheet():
+    creds_dict = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
+
+    scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+
+    client = gspread.authorize(creds)
+
+    sheet = client.open("Hostel Leave Records").sheet1
+    return sheet
+
+# =========================
+# HELPER
 # =========================
 
 def get_student(roll):
@@ -75,7 +81,6 @@ def get_student(roll):
 
     cur.close()
     conn.close()
-
     return student
 
 
@@ -87,55 +92,12 @@ def format_phone(phone):
         phone = "91" + phone
     return phone
 
-
 # =========================
-# WHATSAPP (OPTIONAL)
+# WHATSAPP
 # =========================
 
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
-#==========================
-#APPROVE
-#==========================
-@app.route("/approve", methods=["POST"])
-def approve():
-    try:
-        roll = request.form.get("roll").strip().upper()
-        action = request.form.get("action")
-        reason = request.form.get("reason")
-        days = request.form.get("days")
-        start = request.form.get("start")
-        end = request.form.get("end")
-
-        # Get student
-        student = get_student(roll)
-
-        if not student:
-            return "Student not found"
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Save leave request
-        cur.execute("""
-        INSERT INTO leave_requests (roll_number, status)
-        VALUES (%s, %s)
-        """, (roll, action))
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        # ✅ Send WhatsApp only if phone exists
-        if action == "Approved" and student["parent_phone"]:
-            send_whatsapp(student["parent_phone"], roll, student["name"])
-
-        return redirect("/")
-
-    except Exception as e:
-        print("❌ APPROVE ERROR:", e)
-        return "Error: " + str(e)
-
 
 def send_whatsapp(phone, roll, name):
     phone = format_phone(phone)
@@ -146,7 +108,7 @@ def send_whatsapp(phone, roll, name):
         "messaging_product": "whatsapp",
         "to": phone,
         "type": "text",
-        "text": {"body": f"Hello {name}, Roll: {roll}"}
+        "text": {"body": f"Leave Approved for {name} ({roll})"}
     }
 
     headers = {
@@ -182,6 +144,47 @@ def send_whatsapp(phone, roll, name):
     cur.close()
     conn.close()
 
+# =========================
+# APPROVE (SAVE TO SHEET)
+# =========================
+
+@app.route("/approve", methods=["POST"])
+def approve():
+    try:
+        roll = request.form.get("roll").strip().upper()
+        action = request.form.get("action")
+        reason = request.form.get("reason")
+        days = request.form.get("days")
+        start = request.form.get("start")
+        end = request.form.get("end")
+
+        student = get_student(roll)
+        if not student:
+            return "Student not found"
+
+        # ✅ SAVE TO GOOGLE SHEET
+        sheet = get_sheet()
+        sheet.append_row([
+            student["name"],
+            roll,
+            student["department"],
+            student["room"],
+            reason,
+            days,
+            start,
+            end,
+            action
+        ])
+
+        # ✅ WhatsApp only if approved
+        if action == "Approved" and student.get("parent_phone"):
+            send_whatsapp(student["parent_phone"], roll, student["name"])
+
+        return redirect("/")
+
+    except Exception as e:
+        print("❌ ERROR:", e)
+        return "Error: " + str(e)
 
 # =========================
 # LOGIN
@@ -190,26 +193,19 @@ def send_whatsapp(phone, roll, name):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-
-        if username == "vysya" and password == "7818":
+        if request.form["username"] == "vysya" and request.form["password"] == "7818":
             session["user"] = "admin"
             return redirect("/")
-        else:
-            return "Invalid Login"
-
+        return "Invalid Login"
     return render_template("login.html")
-
 
 @app.route("/logout")
 def logout():
     session.pop("user", None)
     return redirect("/login")
 
-
 # =========================
-# HOME (DASHBOARD)
+# HOME
 # =========================
 
 @app.route("/", methods=["GET", "POST"])
@@ -218,24 +214,18 @@ def home():
         return redirect("/login")
 
     student = None
+    roll = None
 
     if request.method == "POST":
-        roll = request.form.get("roll").strip().upper()   # ✅ FIX HERE
-    if roll:
-        student = get_student(roll)
+        roll = request.form.get("roll").strip().upper()
+        if roll:
+            student = get_student(roll)
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
 
-    # Dashboard counts
     cur.execute("SELECT COUNT(*) FROM students")
     students_count = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Approved'")
-    approved = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Rejected'")
-    rejected = cur.fetchone()[0]
 
     cur.execute("SELECT COUNT(*) FROM message_logs WHERE status='sent'")
     messages = cur.fetchone()[0]
@@ -255,15 +245,14 @@ def home():
         "warden.html",
         student=student,
         students_count=students_count,
-        approved_count=approved,
-        rejected_count=rejected,
+        approved_count=0,
+        rejected_count=0,
         messages_sent=messages,
         messages_list=messages_list
     )
 
-
 # =========================
-# ADD / UPDATE STUDENT
+# ADD STUDENT
 # =========================
 
 @app.route("/add-student", methods=["POST"])
@@ -296,7 +285,6 @@ def add_student():
 
     return redirect("/")
 
-
 # =========================
 # DELETE STUDENT
 # =========================
@@ -309,23 +297,12 @@ def delete_student():
     cur = conn.cursor()
 
     cur.execute("DELETE FROM students WHERE roll_number=%s", (roll,))
-
     conn.commit()
+
     cur.close()
     conn.close()
 
     return redirect("/")
-
-
-# =========================
-# TEST WHATSAPP
-# =========================
-
-@app.route("/send-test")
-def test():
-    send_whatsapp("9999999999", "TEST01", "Demo Student")
-    return "Message Sent"
-
 
 # =========================
 # RUN
