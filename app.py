@@ -160,6 +160,10 @@ def send_whatsapp(phone, action, name, roll, dept, room, reason, days, start, en
 # =========================
 
 def get_sheet():
+    import os
+    import json
+    import gspread
+    from google.oauth2.service_account import Credentials
 
     creds_dict = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
 
