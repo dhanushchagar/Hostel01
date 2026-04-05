@@ -81,8 +81,7 @@ def format_phone(phone):
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
-def send_whatsapp_(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
-
+def send_whatsapp(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
     formatted = format_phone(phone)
 
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
@@ -92,7 +91,6 @@ def send_whatsapp_(phone, action, name, roll, dept, room, reason, days, start, e
         "Content-Type": "application/json"
     }
 
-    # TEMPLATE MESSAGE
     data = {
         "messaging_product": "whatsapp",
         "to": formatted,
@@ -123,19 +121,24 @@ def send_whatsapp_(phone, action, name, roll, dept, room, reason, days, start, e
         print("📦 Payload:", json.dumps(data, indent=2))
 
         res = requests.post(url, headers=headers, json=data, timeout=10)
-
         print("✅ Status:", res.status_code)
         print("📨 Response:", res.text)
 
         response_json = res.json()
 
         if "messages" in response_json:
+            message_id = response_json["messages"][0]["id"]
+            status = "sent"
             print("✅ Message accepted by WhatsApp")
         else:
+            message_id = None
+            status = "failed"
             print("❌ Message failed:", response_json)
 
     except Exception as e:
         print("❌ WhatsApp Error:", e)
+        message_id = None
+        status = "error"
 
     # Save log
     conn = get_db_connection()
@@ -144,12 +147,11 @@ def send_whatsapp_(phone, action, name, roll, dept, room, reason, days, start, e
     cur.execute("""
     INSERT INTO message_logs (roll_number, phone, message_id, status)
     VALUES (%s,%s,%s,%s)
-    """, (roll, phone, message_id, status))
+    """, (roll, formatted, message_id, status))
 
     conn.commit()
     cur.close()
     conn.close()
-
 # =========================
 # APPROVE (SAVE TO SHEET)
 # =========================
@@ -175,7 +177,6 @@ def get_sheet():
 
     sheet = client.open("Hostel Leave Records").sheet1
     return sheet
-
 @app.route("/approve", methods=["POST"])
 def approve():
     try:
@@ -204,9 +205,27 @@ def approve():
             action
         ])
 
-        # ✅ WhatsApp only if approved
+        # ✅ Send to parent
         if action == "Approved" and student.get("parent_phone"):
-            send_whatsapp(student["parent_phone"], roll, student["name"])
+            send_whatsapp(
+                student["parent_phone"],
+                student,
+                reason,
+                days,
+                start,
+                end
+            )
+
+        # ✅ Send to student
+        if action == "Approved" and student.get("student_phone"):
+            send_whatsapp(
+                student["student_phone"],
+                student,
+                reason,
+                days,
+                start,
+                end
+            )
 
         return redirect("/")
 
@@ -214,6 +233,7 @@ def approve():
         print("❌ ERROR:", e)
         return "Error: " + str(e)
 
+    
 # =========================
 # LOGIN
 # =========================
