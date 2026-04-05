@@ -53,33 +53,7 @@ def init_db():
 
 init_db()
 
-def save_to_google_sheets(data):
-    try:
-        creds_json = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
 
-        credentials = Credentials.from_service_account_info(
-            creds_json,
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"
-            ],
-        )
-
-        gc = gspread.authorize(credentials)
-
-        for attempt in range(3):
-            try:
-                sheet = gc.open("Hostel Leave Records").sheet1
-                sheet.append_row(data)
-                return True
-            except APIError as e:
-                print("Google Sheets API error:", e)
-                time.sleep(3)
-
-    except Exception as e:
-        print("Google Sheets connection error:", e)
-
-    return False
 def get_student(roll):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
@@ -155,6 +129,28 @@ def send_whatsapp(phone, roll, name):
 # =========================
 # APPROVE (SAVE TO SHEET)
 # =========================
+# =========================
+# GOOGLE SHEETS
+# =========================
+
+def get_sheet():
+    import json
+    import os
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    creds_dict = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
+
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+    client = gspread.authorize(creds)
+
+    sheet = client.open("Hostel Leave Records").sheet1
+    return sheet
 
 @app.route("/approve", methods=["POST"])
 def approve():
