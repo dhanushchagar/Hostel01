@@ -99,37 +99,42 @@ PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 #==========================
 @app.route("/approve", methods=["POST"])
 def approve():
-    roll = request.form.get("roll")
-    action = request.form.get("action")  # Approved / Rejected
-    reason = request.form.get("reason")
-    days = request.form.get("days")
-    start = request.form.get("start")
-    end = request.form.get("end")
+    try:
+        roll = request.form.get("roll").strip().upper()
+        action = request.form.get("action")
+        reason = request.form.get("reason")
+        days = request.form.get("days")
+        start = request.form.get("start")
+        end = request.form.get("end")
 
-    # Get student details
-    student = get_student(roll)
+        # Get student
+        student = get_student(roll)
 
-    if not student:
-        return "Student not found"
+        if not student:
+            return "Student not found"
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    # Save leave request
-    cur.execute("""
-    INSERT INTO leave_requests (roll_number, status)
-    VALUES (%s, %s)
-    """, (roll, action))
+        # Save leave request
+        cur.execute("""
+        INSERT INTO leave_requests (roll_number, status)
+        VALUES (%s, %s)
+        """, (roll, action))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    # ✅ Send WhatsApp to parent
-    if action == "Approved":
-        send_whatsapp(student["parent_phone"], roll, student["name"])
+        # ✅ Send WhatsApp only if phone exists
+        if action == "Approved" and student["parent_phone"]:
+            send_whatsapp(student["parent_phone"], roll, student["name"])
 
-    return redirect("/")
+        return redirect("/")
+
+    except Exception as e:
+        print("❌ APPROVE ERROR:", e)
+        return "Error: " + str(e)
 
 
 def send_whatsapp(phone, roll, name):
