@@ -79,7 +79,7 @@ def format_phone(phone):
 # =========================
 
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
-PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
 
 def send_whatsapp(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
     formatted = format_phone(phone)
@@ -160,10 +160,6 @@ def send_whatsapp(phone, action, name, roll, dept, room, reason, days, start, en
 # =========================
 
 def get_sheet():
-    import json
-    import os
-    import gspread
-    from google.oauth2.service_account import Credentials
 
     creds_dict = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
 
