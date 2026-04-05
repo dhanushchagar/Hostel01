@@ -81,7 +81,7 @@ def format_phone(phone):
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
-def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
+def send_whatsapp_(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
 
     formatted = format_phone(phone)
 
