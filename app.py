@@ -81,37 +81,61 @@ def format_phone(phone):
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
-def send_whatsapp(phone, roll, name):
-    phone = format_phone(phone)
+def send_whatsapp_message(phone, action, name, roll, dept, room, reason, days, start, end, use_template=True):
 
-    url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
+    formatted = format_phone(phone)
 
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone,
-        "type": "text",
-        "text": {"body": f"Leave Approved for {name} ({roll})"}
-    }
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
 
     headers = {
-        "Authorization": f"Bearer {TOKEN}",
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
 
+    # TEMPLATE MESSAGE
+    data = {
+        "messaging_product": "whatsapp",
+        "to": formatted,
+        "type": "template",
+        "template": {
+            "name": "hostel_details",
+            "language": {"code": "en"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": safe(name)},
+                        {"type": "text", "text": safe(roll)},
+                        {"type": "text", "text": safe(dept)},
+                        {"type": "text", "text": safe(room)},
+                        {"type": "text", "text": safe(reason)},
+                        {"type": "text", "text": safe(days)},
+                        {"type": "text", "text": safe(start)},
+                        {"type": "text", "text": safe(end)}
+                    ]
+                }
+            ]
+        }
+    }
+
     try:
-        res = requests.post(url, headers=headers, json=payload)
-        response = res.json()
+        print("📱 Sending WhatsApp to:", formatted)
+        print("📦 Payload:", json.dumps(data, indent=2))
 
-        if "messages" in response:
-            message_id = response["messages"][0]["id"]
-            status = "sent"
+        res = requests.post(url, headers=headers, json=data, timeout=10)
+
+        print("✅ Status:", res.status_code)
+        print("📨 Response:", res.text)
+
+        response_json = res.json()
+
+        if "messages" in response_json:
+            print("✅ Message accepted by WhatsApp")
         else:
-            message_id = None
-            status = "failed"
+            print("❌ Message failed:", response_json)
 
-    except Exception:
-        message_id = None
-        status = "error"
+    except Exception as e:
+        print("❌ WhatsApp Error:", e)
 
     # Save log
     conn = get_db_connection()
@@ -311,6 +335,22 @@ def delete_student():
 # =========================
 # RUN
 # =========================
+@app.route("/webhook", methods=["GET", "POST"])
+def webhook():
+    if request.method == "GET":
+        verify_token = "myverify123"
+
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
+
+        if token == verify_token:
+            return challenge
+        return "Error", 403
+
+    elif request.method == "POST":
+        data = request.get_json()
+        print("Webhook Data:", data)
+        return "OK", 200
 
 if __name__ == "__main__":
     app.run(debug=True)
