@@ -1,6 +1,4 @@
 import os
-import json
-import time
 import requests
 from datetime import datetime
 
@@ -8,14 +6,8 @@ from flask import Flask, request, render_template, redirect, session
 import psycopg2
 from psycopg2.extras import DictCursor
 
-import gspread
-from gspread.exceptions import APIError
-from google.oauth2.service_account import Credentials
-
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "hostel-secret")
-
-VERIFY_TOKEN = "hostel123"
 
 # =========================
 # DATABASE
@@ -24,10 +16,34 @@ VERIFY_TOKEN = "hostel123"
 def get_db_connection():
     return psycopg2.connect(os.environ.get("DATABASE_URL"), sslmode="require")
 
+
 def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # STUDENTS TABLE
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS students (
+        id SERIAL PRIMARY KEY,
+        roll_number VARCHAR(20) UNIQUE,
+        name TEXT,
+        department TEXT,
+        room TEXT,
+        student_phone TEXT,
+        parent_phone TEXT
+    );
+    """)
+
+    # LEAVE REQUESTS TABLE
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS leave_requests (
+        id SERIAL PRIMARY KEY,
+        roll_number VARCHAR(20),
+        status VARCHAR(20)
+    );
+    """)
+
+    # MESSAGE LOGS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS message_logs (
         id SERIAL PRIMARY KEY,
@@ -43,11 +59,25 @@ def init_db():
     cur.close()
     conn.close()
 
+
 init_db()
 
 # =========================
-# PHONE FORMAT
+# HELPER FUNCTIONS
 # =========================
+
+def get_student(roll):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=DictCursor)
+
+    cur.execute("SELECT * FROM students WHERE roll_number=%s", (roll,))
+    student = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    return student
+
 
 def format_phone(phone):
     phone = ''.join(filter(str.isdigit, str(phone)))
@@ -57,27 +87,14 @@ def format_phone(phone):
         phone = "91" + phone
     return phone
 
+
 # =========================
-# WHATSAPP SEND
+# WHATSAPP (OPTIONAL)
 # =========================
 
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
 
-@app.route("/delete-student", methods=["POST"])
-def delete_student():
-    roll = request.form.get("roll").strip().upper()
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM students WHERE roll_number=%s", (roll,))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect("/")
 
 def send_whatsapp(phone, roll, name):
     phone = format_phone(phone)
@@ -85,29 +102,12 @@ def send_whatsapp(phone, roll, name):
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
 
     payload = {
-    "messaging_product": "whatsapp",
-    "to": phone,
-    "type": "template",
-    "template": {
-        "name": "hostel_details",
-        "language": {"code": "en"},
-        "components": [
-            {
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": name},
-                    {"type": "text", "text": roll},
-                    {"type": "text", "text": "CSE"},
-                    {"type": "text", "text": "101"},
-                    {"type": "text", "text": "Test Reason"},
-                    {"type": "text", "text": "1"},
-                    {"type": "text", "text": "2026-04-04"},
-                    {"type": "text", "text": "2026-04-04"}
-                ]
-            }
-        ]
+        "messaging_product": "whatsapp",
+        "to": phone,
+        "type": "text",
+        "text": {"body": f"Hello {name}, Roll: {roll}"}
     }
-}
+
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
@@ -117,8 +117,6 @@ def send_whatsapp(phone, roll, name):
         res = requests.post(url, headers=headers, json=payload)
         response = res.json()
 
-        print("📨 Response:", response)
-
         if "messages" in response:
             message_id = response["messages"][0]["id"]
             status = "sent"
@@ -126,12 +124,11 @@ def send_whatsapp(phone, roll, name):
             message_id = None
             status = "failed"
 
-    except Exception as e:
-        print("❌ Error:", e)
+    except Exception:
         message_id = None
         status = "error"
 
-    # SAVE TO DB
+    # Save log
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -144,62 +141,7 @@ def send_whatsapp(phone, roll, name):
     cur.close()
     conn.close()
 
-# =========================
-# WEBHOOK (VERIFY + STATUS)
-# =========================
 
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-
-    # ✅ VERIFY (FIXED)
-    if request.method == "GET":
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-
-        print("MODE:", mode)
-        print("TOKEN:", token)
-        print("CHALLENGE:", challenge)
-
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            print("✅ WEBHOOK VERIFIED")
-            return challenge, 200
-        else:
-            print("❌ VERIFICATION FAILED")
-            return "Forbidden", 403
-
-    # ✅ RECEIVE STATUS UPDATE
-    if request.method == "POST":
-        data = request.get_json()
-        print("📩 Webhook:", data)
-
-        try:
-            statuses = data["entry"][0]["changes"][0]["value"].get("statuses")
-
-            if statuses:
-                for status in statuses:
-                    message_id = status["id"]
-                    status_text = status["status"]
-
-                    conn = get_db_connection()
-                    cur = conn.cursor()
-
-                    cur.execute("""
-                    UPDATE message_logs
-                    SET status=%s
-                    WHERE message_id=%s
-                    """, (status_text, message_id))
-
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-
-                    print(f"✅ Updated {message_id} → {status_text}")
-
-        except Exception as e:
-            print("⚠️ Webhook error:", e)
-
-        return "OK", 200
 # =========================
 # LOGIN
 # =========================
@@ -217,10 +159,17 @@ def login():
             return "Invalid Login"
 
     return render_template("login.html")
+
+
 @app.route("/logout")
 def logout():
     session.pop("user", None)
     return redirect("/login")
+
+
+# =========================
+# HOME (DASHBOARD)
+# =========================
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -237,6 +186,7 @@ def home():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
 
+    # Dashboard counts
     cur.execute("SELECT COUNT(*) FROM students")
     students_count = cur.fetchone()[0]
 
@@ -250,9 +200,9 @@ def home():
     messages = cur.fetchone()[0]
 
     cur.execute("""
-        SELECT roll_number, phone, status, created_at 
-        FROM message_logs 
-        ORDER BY created_at DESC 
+        SELECT roll_number, phone, status, created_at
+        FROM message_logs
+        ORDER BY created_at DESC
         LIMIT 10
     """)
     messages_list = cur.fetchall()
@@ -269,10 +219,72 @@ def home():
         messages_sent=messages,
         messages_list=messages_list
     )
+
+
+# =========================
+# ADD / UPDATE STUDENT
+# =========================
+
+@app.route("/add-student", methods=["POST"])
+def add_student():
+    roll = request.form.get("roll").strip().upper()
+    name = request.form.get("name")
+    department = request.form.get("department")
+    room = request.form.get("room")
+    student_phone = request.form.get("student_phone")
+    parent_phone = request.form.get("parent_phone")
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT INTO students (roll_number, name, department, room, student_phone, parent_phone)
+    VALUES (%s,%s,%s,%s,%s,%s)
+    ON CONFLICT (roll_number)
+    DO UPDATE SET
+        name=EXCLUDED.name,
+        department=EXCLUDED.department,
+        room=EXCLUDED.room,
+        student_phone=EXCLUDED.student_phone,
+        parent_phone=EXCLUDED.parent_phone
+    """, (roll, name, department, room, student_phone, parent_phone))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/")
+
+
+# =========================
+# DELETE STUDENT
+# =========================
+
+@app.route("/delete-student", methods=["POST"])
+def delete_student():
+    roll = request.form.get("roll").strip().upper()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM students WHERE roll_number=%s", (roll,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/")
+
+
+# =========================
+# TEST WHATSAPP
+# =========================
+
 @app.route("/send-test")
 def test():
-    send_whatsapp("919999999999", "TEST01", "Demo Student")
+    send_whatsapp("9999999999", "TEST01", "Demo Student")
     return "Message Sent"
+
 
 # =========================
 # RUN
