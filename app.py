@@ -53,25 +53,33 @@ def init_db():
 
 init_db()
 
-# =========================
-# GOOGLE SHEETS
-# =========================
+def save_to_google_sheets(data):
+    try:
+        creds_json = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
 
-def get_sheet():
-    creds_dict = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
+        credentials = Credentials.from_service_account_info(
+            creds_json,
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ],
+        )
 
-    scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        gc = gspread.authorize(credentials)
 
-    client = gspread.authorize(creds)
+        for attempt in range(3):
+            try:
+                sheet = gc.open("Hostel Leave Records").sheet1
+                sheet.append_row(data)
+                return True
+            except APIError as e:
+                print("Google Sheets API error:", e)
+                time.sleep(3)
 
-    sheet = client.open("Hostel Leave Records").sheet1
-    return sheet
+    except Exception as e:
+        print("Google Sheets connection error:", e)
 
-# =========================
-# HELPER
-# =========================
-
+    return False
 def get_student(roll):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
