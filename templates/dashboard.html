@@ -1,0 +1,23 @@
+<h2>WhatsApp Delivery Dashboard</h2>
+
+<p>Sent: {{ sent }}</p>
+<p>Delivered: {{ delivered }}</p>
+<p>Read: {{ read }}</p>
+
+<table border="1">
+<tr>
+    <th>Roll</th>
+    <th>Phone</th>
+    <th>Status</th>
+    <th>Time</th>
+</tr>
+
+{% for row in logs %}
+<tr>
+    <td>{{ row.roll_number }}</td>
+    <td>{{ row.phone }}</td>
+    <td>{{ row.status }}</td>
+    <td>{{ row.created_at }}</td>
+</tr>
+{% endfor %}
+</table>
