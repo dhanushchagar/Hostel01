@@ -94,6 +94,42 @@ def format_phone(phone):
 
 TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
+#==========================
+#APPROVE
+#==========================
+@app.route("/approve", methods=["POST"])
+def approve():
+    roll = request.form.get("roll")
+    action = request.form.get("action")  # Approved / Rejected
+    reason = request.form.get("reason")
+    days = request.form.get("days")
+    start = request.form.get("start")
+    end = request.form.get("end")
+
+    # Get student details
+    student = get_student(roll)
+
+    if not student:
+        return "Student not found"
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Save leave request
+    cur.execute("""
+    INSERT INTO leave_requests (roll_number, status)
+    VALUES (%s, %s)
+    """, (roll, action))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    # ✅ Send WhatsApp to parent
+    if action == "Approved":
+        send_whatsapp(student["parent_phone"], roll, student["name"])
+
+    return redirect("/")
 
 
 def send_whatsapp(phone, roll, name):
@@ -179,9 +215,9 @@ def home():
     student = None
 
     if request.method == "POST":
-        roll = request.form.get("roll")
-        if roll:
-            student = get_student(roll)
+        roll = request.form.get("roll").strip().upper()   # ✅ FIX HERE
+    if roll:
+        student = get_student(roll)
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=DictCursor)
